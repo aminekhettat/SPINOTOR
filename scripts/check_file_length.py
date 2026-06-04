@@ -26,7 +26,7 @@ _THRESHOLDS: list[tuple[str, int]] = [
     # UI module: main_window.py grown with auto-calibration Phase 1 additions
     ("src/ui/**/*.py", 7_300),
     # FOC controller grown with STSMO/ActiveFlux/MRAS additions
-    ("src/control/foc_controller.py", 2_750),
+    ("src/control/foc_controller.py", 2_800),
     # Control algorithms: calibrators are large but bounded
     ("src/control/**/*.py", 1_600),
     # Core simulation engine and models

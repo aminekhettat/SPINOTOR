@@ -36,7 +36,6 @@ if str(ROOT) not in sys.path:
 from src.control import FOCController, SVMGenerator  # noqa: E402
 from src.core import BLDCMotor, ConstantLoad, MotorParameters, SimulationEngine  # noqa: E402
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 DT = 1e-4  # 100 µs control + sim step (same as run_observer_validation.py)
 T_SIM = 4.0

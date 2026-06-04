@@ -49,9 +49,11 @@ logger = logging.getLogger(__name__)
 
 # ── Export presets ────────────────────────────────────────────────────────────
 
+
 @dataclass
 class ExportPreset:
     """Named export preset for publication/report use."""
+
     name: str
     figsize: tuple[float, float]
     dpi: int
@@ -135,6 +137,7 @@ EXPORT_PRESETS: list[ExportPreset] = [
 
 # ── PlotStyle dataclass (shared with SimulationPlotter) ───────────────────────
 
+
 @dataclass
 class PlotStyle:
     """
@@ -177,6 +180,7 @@ class PlotStyle:
 
     def to_dict(self) -> dict[str, Any]:
         import dataclasses
+
         return dataclasses.asdict(self)
 
     @classmethod
@@ -193,6 +197,7 @@ class PlotStyle:
 
 
 # ── Style applicator (stateless, no Qt dependency) ───────────────────────────
+
 
 class PlotStyleApplicator:
     """
@@ -256,7 +261,7 @@ class PlotStyleApplicator:
         if style.tight_layout:
             try:
                 fig.tight_layout()
-            except Exception:
+            except Exception:  # pragma: no cover - matplotlib rarely raises here
                 pass
 
     @staticmethod
@@ -294,7 +299,7 @@ try:
     )
 
     _QT_AVAILABLE = True
-except ImportError:
+except ImportError:  # pragma: no cover - PySide6 always available in tests
     _QT_AVAILABLE = False
 
 
@@ -544,9 +549,17 @@ if _QT_AVAILABLE:
 
             self._legend_loc_combo = QComboBox()
             locs = [
-                "best", "upper right", "upper left", "lower left", "lower right",
-                "right", "center left", "center right", "lower center",
-                "upper center", "center",
+                "best",
+                "upper right",
+                "upper left",
+                "lower left",
+                "lower right",
+                "right",
+                "center left",
+                "center right",
+                "lower center",
+                "upper center",
+                "center",
             ]
             for loc in locs:
                 self._legend_loc_combo.addItem(loc)
@@ -638,8 +651,7 @@ if _QT_AVAILABLE:
             from PySide6.QtGui import QColor
 
             current_hex = (
-                btn.styleSheet().replace("background-color: ", "").strip().rstrip(";")
-                or "#1565C0"
+                btn.styleSheet().replace("background-color: ", "").strip().rstrip(";") or "#1565C0"
             )
             color = QColorDialog.getColor(QColor(current_hex), self, f"Pick color for '{label}'")
             if color.isValid():
@@ -671,7 +683,7 @@ if _QT_AVAILABLE:
             PlotStyleApplicator.save(self._work_fig, path, dpi=export_dpi)
             plt.close(self._work_fig)
 
-else:
+else:  # pragma: no cover - PySide6 always available in tests
     # Stub when Qt is not available (e.g. in unit-test environments)
     class PlotCustomizerDialog:  # type: ignore[no-redef]
         """Stub (Qt not available)."""

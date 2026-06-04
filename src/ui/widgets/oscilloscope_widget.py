@@ -50,7 +50,7 @@ try:
     pg.setConfigOption("background", "#1E1E2E")
     pg.setConfigOption("foreground", "#CDD6F4")
     pg.setConfigOption("antialias", True)
-except ImportError:
+except ImportError:  # pragma: no cover
     _PYQTGRAPH_AVAILABLE = False
     logger.info(
         "pyqtgraph not found — OscilloscopeWidget will use matplotlib fallback. "
@@ -72,6 +72,7 @@ try:
         QVBoxLayout,
         QWidget,
     )
+
     _PYSIDE6_AVAILABLE = True
 except ImportError:  # pragma: no cover — headless/CI environments
     _PYSIDE6_AVAILABLE = False
@@ -135,6 +136,7 @@ CHANNEL_REGISTRY: dict[str, tuple[str, str]] = {
 
 # ── Strip model — channel buffer ──────────────────────────────────────────────
 
+
 class _ChannelBuffer:
     """Ring-buffer holding (time, value) pairs for one channel."""
 
@@ -168,7 +170,7 @@ class _ChannelBuffer:
         t_now = self._t[-1]
         cutoff = t_now - window_s
         pairs = [(t, v) for t, v in zip(self._t, self._v) if t >= cutoff]
-        if not pairs:
+        if not pairs:  # pragma: no cover - unreachable: latest sample always satisfies cutoff
             return [], []
         ts, vs = zip(*pairs)
         return list(ts), list(vs)
@@ -260,7 +262,8 @@ if _PYQTGRAPH_AVAILABLE:
 
 # ── matplotlib fallback strip ─────────────────────────────────────────────────
 
-class _MplStrip(QFrame):
+
+class _MplStrip(QFrame):  # pragma: no cover - fallback when pyqtgraph absent
     """One matplotlib-canvas strip (fallback when pyqtgraph absent)."""
 
     def __init__(
@@ -359,6 +362,7 @@ class _MplStrip(QFrame):
 
 # ── Channel header (strip label + channel selector) ───────────────────────────
 
+
 class _StripHeader(QWidget):
     """Compact header row above a strip: channel label + dropdown selector."""
 
@@ -403,6 +407,7 @@ class _StripHeader(QWidget):
 
 
 # ── Main OscilloscopeWidget ───────────────────────────────────────────────────
+
 
 class OscilloscopeWidget(QWidget):
     """
@@ -571,7 +576,7 @@ class OscilloscopeWidget(QWidget):
                 strip.plot_widget.scene().sigMouseMoved.connect(
                     lambda pos, idx=i, s=strip: self._on_mouse_moved(pos, idx, s)
                 )
-            else:
+            else:  # pragma: no cover - matplotlib fallback path
                 strip = _MplStrip(key, label, unit, color, container)
 
             self._strips.append(strip)
@@ -582,7 +587,7 @@ class OscilloscopeWidget(QWidget):
         root.addWidget(self._splitter, 1)
 
         # Backend info label (only when fallback)
-        if not _PYQTGRAPH_AVAILABLE:
+        if not _PYQTGRAPH_AVAILABLE:  # pragma: no cover - matplotlib fallback path
             note = QLabel(
                 "ℹ️ pyqtgraph not installed — using matplotlib fallback. "
                 "Run: pip install pyqtgraph  for full oscilloscope features."
@@ -687,7 +692,7 @@ class OscilloscopeWidget(QWidget):
         source_strip: Any,
     ) -> None:
         """Propagate crosshair and update readout for pyqtgraph strips."""
-        if not _PYQTGRAPH_AVAILABLE:
+        if not _PYQTGRAPH_AVAILABLE:  # pragma: no cover - guard for matplotlib fallback path
             return
         try:
             vb = source_strip.plot_widget.plotItem.vb
@@ -709,9 +714,7 @@ class OscilloscopeWidget(QWidget):
                             idx = bisect.bisect_left(ts, x)
                             idx = max(0, min(idx, len(vs) - 1))
                             reg = CHANNEL_REGISTRY.get(k, (k, ""))
-                            parts.append(
-                                f"Ch{i + 1} {reg[0]}: {vs[idx]:.4g} {reg[1]}"
-                            )
+                            parts.append(f"Ch{i + 1} {reg[0]}: {vs[idx]:.4g} {reg[1]}")
                 self._readout_label.setText("  |  ".join(parts))
         except Exception:
             pass

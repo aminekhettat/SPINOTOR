@@ -12,7 +12,7 @@ Provides comprehensive GUI for:
 - Data export
 
 :author: BLDC Control Team
-:version: 0.12.0
+:version: 0.13.0
 """
 
 import csv
@@ -778,7 +778,7 @@ class BLDCMotorControlGUI(QMainWindow):
         super().__init__()
 
         APP_NAME = "BLIND SYSTEMS SPINOTOR"
-        APP_VERSION = "0.12.0"
+        APP_VERSION = "0.13.0"
 
         self.setWindowTitle(f"{APP_NAME} - SPINOTOR (v{APP_VERSION})")
         self.setGeometry(100, 100, 1500, 950)
@@ -1258,7 +1258,7 @@ class BLDCMotorControlGUI(QMainWindow):
 
         html = (
             "<h1>BLIND SYSTEMS SPINOTOR - User Manual</h1>"
-            "<p><b>Version:</b> 0.12.0</p>"
+            "<p><b>Version:</b> 0.13.0</p>"
             "<p><b>Author:</b> Amine Khettat</p>"
             "<h2>1. Getting Started</h2>"
             "<p>Configure motor, load and controller parameters, then start simulation.</p>"
@@ -1658,7 +1658,7 @@ class BLDCMotorControlGUI(QMainWindow):
     def _show_about(self):
         """Show about dialog."""
         about_text = (
-            "<h2>BLIND SYSTEMS SPINOTOR v0.12.0</h2>"
+            "<h2>BLIND SYSTEMS SPINOTOR v0.13.0</h2>"
             "<p><b>Advanced SPINOTOR</b></p>"
             "<p><b>Author:</b> Amine Khettat</p>"
             "<p><b>Copyright:</b> 2026 BLIND SYSTEMS</p>"
@@ -2438,8 +2438,7 @@ class BLDCMotorControlGUI(QMainWindow):
 
         self.foc_angle_observer_mode = LabeledComboBox(
             "Angle Observer",
-            items=["Measured", "PLL", "SMO", "STSMO", "ActiveFlux",
-                   "Auto (recommend from motor)"],
+            items=["Measured", "PLL", "SMO", "STSMO", "ActiveFlux", "Auto (recommend from motor)"],
             description=(
                 "Select rotor electrical angle source. "
                 "Measured: direct sensor (always safe — default). "
@@ -2779,8 +2778,7 @@ class BLDCMotorControlGUI(QMainWindow):
 
         self.foc_startup_initial_observer = LabeledComboBox(
             "Startup Initial Observer",
-            items=["Measured", "PLL", "SMO", "STSMO", "ActiveFlux",
-                   "Auto (recommend from motor)"],
+            items=["Measured", "PLL", "SMO", "STSMO", "ActiveFlux", "Auto (recommend from motor)"],
             description=(
                 "Observer mode used during the startup phase before handoff to the main observer. "
                 "Measured: safe choice when a position sensor is available (default). "
@@ -4833,16 +4831,16 @@ class BLDCMotorControlGUI(QMainWindow):
             # ── Derive key motor quantities ────────────────────────────────
             pp = max(1, int(mp["num_poles"]) // 2)
             ke = float(mp["back_emf_constant"])
-            R  = float(mp["phase_resistance"])
+            R = float(mp["phase_resistance"])
             v_bus = float(mp["nominal_voltage"])
             ld = float(mp.get("ld") or mp["phase_inductance"])
             lq = float(mp.get("lq") or mp["phase_inductance"])
             # Average inductance for electrical time constant
             L_avg = (ld + lq) / 2.0
-            tau_e = L_avg / max(R, 1e-9)          # electrical time constant [s]
+            tau_e = L_avg / max(R, 1e-9)  # electrical time constant [s]
 
             omega_m_max = rated_rpm / 60.0 * 2.0 * float(np.pi)
-            omega_e_max = omega_m_max * pp         # max electrical angular speed [rad/s]
+            omega_e_max = omega_m_max * pp  # max electrical angular speed [rad/s]
 
             # ── Saliency detection ─────────────────────────────────────────
             # IPM: Lq/Ld > 1.2 — requires EEMF model + SOGI to avoid angle bias
@@ -4896,7 +4894,7 @@ class BLDCMotorControlGUI(QMainWindow):
                 rotor_inertia=float(mp["rotor_inertia"]),
                 friction_coefficient=float(mp["friction_coefficient"]),
                 num_poles=int(mp["num_poles"]),
-                poles_pairs=pp,   # must be set explicitly; default is 4
+                poles_pairs=pp,  # must be set explicitly; default is 4
                 ld=ld,
                 lq=lq,
                 model_type=mp.get("model_type", "dq"),
@@ -4919,9 +4917,9 @@ class BLDCMotorControlGUI(QMainWindow):
                 lpf_alpha_smo = float(dt_ui) / (float(dt_ui) + 3.0 * tau_e)
                 lpf_alpha_smo = float(np.clip(lpf_alpha_smo, 1e-4, 0.5))
                 smo = {
-                    "k_slide":   k_slide_smo,
+                    "k_slide": k_slide_smo,
                     "lpf_alpha": lpf_alpha_smo,
-                    "boundary":  0.08,
+                    "boundary": 0.08,
                 }
             else:
                 smo = ctrl.calibrate_smo_gains_analytical(
@@ -4951,10 +4949,10 @@ class BLDCMotorControlGUI(QMainWindow):
             # We use the open-loop handoff speed (computed below) as reference.
             # f_e_min = handoff_rpm × pp / 60; dc_cutoff = f_e_min / 10
             # (clamped to [0.05, 0.5] Hz for safety).
-            omega_m_emf_thresh = 0.05 * v_bus / max(ke, 1e-9)   # [rad/s mech]
+            omega_m_emf_thresh = 0.05 * v_bus / max(ke, 1e-9)  # [rad/s mech]
             handoff_rpm = max(60.0, omega_m_emf_thresh * 60.0 / (2.0 * float(np.pi)))
-            handoff_rpm = round(handoff_rpm / 10.0) * 10.0       # snap to 10 RPM
-            f_e_min = handoff_rpm * pp / 60.0                     # [Hz electrical]
+            handoff_rpm = round(handoff_rpm / 10.0) * 10.0  # snap to 10 RPM
+            f_e_min = handoff_rpm * pp / 60.0  # [Hz electrical]
             dc_cutoff = float(np.clip(f_e_min / 10.0, 0.05, 0.5))
 
             # ── Startup sequence auto-tuning ────────────────────────────────
@@ -4964,25 +4962,20 @@ class BLDCMotorControlGUI(QMainWindow):
             align_current = float(np.clip(0.10 * v_bus, 0.5, 3.0))
             # Open-loop speed ramp: from 10 % to handoff speed
             initial_rpm = float(np.clip(0.10 * handoff_rpm, 5.0, 30.0))
-            ramp_time = float(np.clip(handoff_rpm / max(rated_rpm, 1.0) * 0.5,
-                                      0.10, 2.0))
+            ramp_time = float(np.clip(handoff_rpm / max(rated_rpm, 1.0) * 0.5, 0.10, 2.0))
             # Startup iq reference: enough to accelerate, capped [0.5, 3 A]
             iq_startup = float(np.clip(0.05 * v_bus, 0.5, 3.0))
             # Observer handoff thresholds
-            min_emf_v    = float(np.clip(0.03 * v_bus, 0.05, 2.0))
+            min_emf_v = float(np.clip(0.03 * v_bus, 0.05, 2.0))
             min_speed_rpm = handoff_rpm
-            min_time_s   = float(np.clip(ramp_time * 0.8, 0.05, 1.0))
+            min_time_s = float(np.clip(ramp_time * 0.8, 0.05, 1.0))
 
             # ── Apply all values to GUI widgets ────────────────────────────
             # EEMF / SOGI toggles (auto-enable for IPM motors)
             if hasattr(self, "foc_smo_eemf_model"):
-                self.foc_smo_eemf_model.setCurrentText(
-                    "Enabled" if is_salient else "Disabled"
-                )
+                self.foc_smo_eemf_model.setCurrentText("Enabled" if is_salient else "Disabled")
             if hasattr(self, "foc_smo_sogi_filter"):
-                self.foc_smo_sogi_filter.setCurrentText(
-                    "Enabled" if is_salient else "Disabled"
-                )
+                self.foc_smo_sogi_filter.setCurrentText("Enabled" if is_salient else "Disabled")
 
             # D/Q decoupling — always beneficial for FOC; especially critical
             # for IPM motors where Lq >> Ld produces large cross-coupling terms.
@@ -4994,7 +4987,7 @@ class BLDCMotorControlGUI(QMainWindow):
             #   P_equiv ≈ Vbus² / (2R) gives a power proxy that works across
             #   motors from 12 V / 50 W to 48 V / 5 kW without knowing rated
             #   current explicitly.  30 % of that value is the reactive budget.
-            p_equiv = v_bus ** 2 / max(2.0 * R, 1e-9)
+            p_equiv = v_bus**2 / max(2.0 * R, 1e-9)
             pfc_max_var = float(np.clip(p_equiv * 0.30, 100.0, 50000.0))
 
             # window_samples: must cover ≥2 electrical cycles at rated speed so
@@ -5064,7 +5057,7 @@ class BLDCMotorControlGUI(QMainWindow):
                 f"  STSMO:     k1={stsmo['k1']:.3f}  k2_min={k2_min_motor:.1f} V/s"
                 f"  k2_factor=1.0  (λ={convergence_factor:.1f})\n"
                 f"  ActiveFlux: dc_cutoff={dc_cutoff:.3f} Hz\n"
-                f"  Startup:   align={align_duration*1000:.0f} ms  "
+                f"  Startup:   align={align_duration * 1000:.0f} ms  "
                 f"Ialign={align_current:.1f} A  "
                 f"ramp {initial_rpm:.0f}→{handoff_rpm:.0f} RPM in {ramp_time:.2f} s  "
                 f"min_EMF={min_emf_v:.2f} V\n"
@@ -5149,10 +5142,10 @@ class BLDCMotorControlGUI(QMainWindow):
                 continue
 
             gui = {
-                "R":  mp["phase_resistance"],
-                "L":  mp["phase_inductance"],
+                "R": mp["phase_resistance"],
+                "L": mp["phase_inductance"],
                 "Ke": mp["back_emf_constant"],
-                "V":  mp["nominal_voltage"],
+                "V": mp["nominal_voltage"],
                 "pp": max(1, int(mp["num_poles"]) // 2),
             }
 
@@ -5177,9 +5170,7 @@ class BLDCMotorControlGUI(QMainWindow):
         * ``foc_speed_kp``, ``foc_speed_ki`` — outer speed loop PI
         """
         try:
-            calib_dir = (
-                Path(__file__).resolve().parents[2] / "data" / "tuning_sessions"
-            )
+            calib_dir = Path(__file__).resolve().parents[2] / "data" / "tuning_sessions"
             mp = self._collect_current_motor_parameters()
             data = self._match_calib_file(calib_dir, "auto_calibrated_", mp)
 
@@ -5193,8 +5184,8 @@ class BLDCMotorControlGUI(QMainWindow):
             res = data.get("tuning_result", {})
             current_kp = float(res["current_kp"])
             current_ki = float(res["current_ki"])
-            speed_kp   = float(res["speed_kp"])
-            speed_ki   = float(res["speed_ki"])
+            speed_kp = float(res["speed_kp"])
+            speed_ki = float(res["speed_ki"])
 
             # Stage 1 produces a single unified current_kp/ki; apply to both
             # d- and q-axis controllers.  The d-axis (flux) and q-axis (torque)
@@ -5216,8 +5207,7 @@ class BLDCMotorControlGUI(QMainWindow):
 
         except Exception as exc:  # noqa: BLE001
             self.calib_log.append(
-                f"\n[Stage 1 gains load failed: {exc}]\n"
-                "  Current / speed PI gains unchanged.\n"
+                f"\n[Stage 1 gains load failed: {exc}]\n  Current / speed PI gains unchanged.\n"
             )
 
     def _load_stage2_fw_to_gui(self) -> None:
@@ -5240,9 +5230,7 @@ class BLDCMotorControlGUI(QMainWindow):
         physics-based analytical values for reference.
         """
         try:
-            calib_dir = (
-                Path(__file__).resolve().parents[2] / "data" / "tuning_sessions"
-            )
+            calib_dir = Path(__file__).resolve().parents[2] / "data" / "tuning_sessions"
             mp = self._collect_current_motor_parameters()
             data = self._match_calib_file(calib_dir, "fw_calibrated_", mp)
 
@@ -5253,20 +5241,18 @@ class BLDCMotorControlGUI(QMainWindow):
                 )
                 return
 
-            pp        = data.get("physics_params", {})
-            fw_start  = float(pp.get("fw_start_rpm", 0.0))
-            fw_gain   = float(data.get("selected_gain", pp.get("fw_gain", 1.0)))
+            pp = data.get("physics_params", {})
+            fw_start = float(pp.get("fw_start_rpm", 0.0))
+            fw_gain = float(data.get("selected_gain", pp.get("fw_gain", 1.0)))
             fw_id_max = float(data.get("selected_fw_id_max_a", pp.get("fw_id_max_a", 5.0)))
-            fw_head   = float(pp.get("fw_headroom_target_v", 1.0))
+            fw_head = float(pp.get("fw_headroom_target_v", 1.0))
             fw_needed = bool(pp.get("fw_needed", fw_start > 0))
 
             # Rated current from motor_params_summary (used for Iq limit)
-            summary    = data.get("motor_params_summary", {})
-            i_rated    = float(summary.get("I_rated", 0.0))
+            summary = data.get("motor_params_summary", {})
+            i_rated = float(summary.get("I_rated", 0.0))
 
-            self.foc_field_weakening_mode.setCurrentText(
-                "Enabled" if fw_needed else "Disabled"
-            )
+            self.foc_field_weakening_mode.setCurrentText("Enabled" if fw_needed else "Disabled")
             self.foc_field_weakening_start_speed.setValue(fw_start)
             self.foc_field_weakening_gain.setValue(fw_gain)
             self.foc_field_weakening_max_id.setValue(abs(fw_id_max))
@@ -5278,7 +5264,7 @@ class BLDCMotorControlGUI(QMainWindow):
                 self.foc_iq_limit.setValue(min(i_rated, iq_limit_max))
 
             profile_name = data.get("motor_profile_name", "unknown")
-            all_passed   = data.get("all_passed", False)
+            all_passed = data.get("all_passed", False)
             self.calib_log.append(
                 f"\n[Stage 2 FW parameters loaded — profile: {profile_name}]\n"
                 f"  FW mode:    {'Enabled' if fw_needed else 'Disabled (no FW needed)'}\n"
@@ -5287,15 +5273,17 @@ class BLDCMotorControlGUI(QMainWindow):
                 f"  Max -Id:    {fw_id_max:.1f} A\n"
                 f"  Headroom:   {fw_head:.3f} V\n"
                 f"  All operating-point checks: {'PASS' if all_passed else 'PARTIAL'}\n"
-                + (f"  Iq limit:   "
-                   f"{min(i_rated, float(self.foc_iq_limit.spinner.maximum())):.1f} A\n"
-                   if i_rated > 0 else "")
+                + (
+                    f"  Iq limit:   "
+                    f"{min(i_rated, float(self.foc_iq_limit.spinner.maximum())):.1f} A\n"
+                    if i_rated > 0
+                    else ""
+                )
             )
 
         except Exception as exc:  # noqa: BLE001
             self.calib_log.append(
-                f"\n[Stage 2 FW load failed: {exc}]\n"
-                "  Field-weakening parameters unchanged.\n"
+                f"\n[Stage 2 FW load failed: {exc}]\n  Field-weakening parameters unchanged.\n"
             )
 
     def _stop_auto_calibrate_all(self) -> None:

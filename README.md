@@ -2,7 +2,7 @@
 
 > **Free, accessible BLDC/PMSM motor-control simulator with sensorless FOC and V/f control — designed for engineers, researchers, and users with visual disabilities.**
 
-**Version 0.12.0** · Python 3.12 · PySide6 · [Documentation](docs/index.rst) · [Quickstart](QUICKSTART.md) · [Roadmap](Roadmap/ROADMAP.md)
+**Version 0.13.0** · Python 3.12 · PySide6 · [Documentation](docs/index.rst) · [Quickstart](QUICKSTART.md) · [Roadmap](Roadmap/ROADMAP.md)
 
 ---
 

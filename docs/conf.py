@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 project = "SPINOTOR"
 copyright = "2026, Amine Khettat"
 author = "Amine Khettat"
-release = "0.12.0"
+release = "0.13.0"
 
 # -- General configuration ---
 

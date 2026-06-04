@@ -11,7 +11,7 @@ Includes:
 - visualization: Plotting and data export
 
 :author: Amine Khettat — Blind Systems
-:version: 0.11.0
+:version: 0.12.0
 """
 
 from importlib import import_module

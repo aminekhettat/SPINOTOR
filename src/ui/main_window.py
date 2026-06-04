@@ -12,7 +12,7 @@ Provides comprehensive GUI for:
 - Data export
 
 :author: BLDC Control Team
-:version: 0.11.0
+:version: 0.12.0
 """
 
 import csv
@@ -778,7 +778,7 @@ class BLDCMotorControlGUI(QMainWindow):
         super().__init__()
 
         APP_NAME = "BLIND SYSTEMS SPINOTOR"
-        APP_VERSION = "0.11.0"
+        APP_VERSION = "0.12.0"
 
         self.setWindowTitle(f"{APP_NAME} - SPINOTOR (v{APP_VERSION})")
         self.setGeometry(100, 100, 1500, 950)
@@ -1258,7 +1258,7 @@ class BLDCMotorControlGUI(QMainWindow):
 
         html = (
             "<h1>BLIND SYSTEMS SPINOTOR - User Manual</h1>"
-            "<p><b>Version:</b> 0.11.0</p>"
+            "<p><b>Version:</b> 0.12.0</p>"
             "<p><b>Author:</b> Amine Khettat</p>"
             "<h2>1. Getting Started</h2>"
             "<p>Configure motor, load and controller parameters, then start simulation.</p>"
@@ -1658,7 +1658,7 @@ class BLDCMotorControlGUI(QMainWindow):
     def _show_about(self):
         """Show about dialog."""
         about_text = (
-            "<h2>BLIND SYSTEMS SPINOTOR v0.11.0</h2>"
+            "<h2>BLIND SYSTEMS SPINOTOR v0.12.0</h2>"
             "<p><b>Advanced SPINOTOR</b></p>"
             "<p><b>Author:</b> Amine Khettat</p>"
             "<p><b>Copyright:</b> 2026 BLIND SYSTEMS</p>"
@@ -4041,25 +4041,41 @@ class BLDCMotorControlGUI(QMainWindow):
         customize_layout = QHBoxLayout()
 
         _cust_specs = [
-            ("Customize 3-Phase", "_last_fig_3phase",
-             "Open style editor for the 3-phase overview plot"),
-            ("Customize Currents", "_last_fig_currents",
-             "Open style editor for the current analysis plot"),
+            (
+                "Customize 3-Phase",
+                "_last_fig_3phase",
+                "Open style editor for the 3-phase overview plot",
+            ),
+            (
+                "Customize Currents",
+                "_last_fig_currents",
+                "Open style editor for the current analysis plot",
+            ),
             ("Customize PFC", "_last_fig_pfc", "Open style editor for the PFC analysis plot"),
-            ("Customize Efficiency", "_last_fig_efficiency",
-             "Open style editor for the efficiency analysis plot"),
-            ("Customize Inverter", "_last_fig_inverter",
-             "Open style editor for the inverter analysis plot"),
-            ("Customize Meas/True", "_last_fig_measured_vs_true",
-             "Open style editor for the measured-vs-true current plot"),
-            ("Customize Selected", "_last_fig_custom",
-             "Open style editor for the custom multi-axis plot"),
+            (
+                "Customize Efficiency",
+                "_last_fig_efficiency",
+                "Open style editor for the efficiency analysis plot",
+            ),
+            (
+                "Customize Inverter",
+                "_last_fig_inverter",
+                "Open style editor for the inverter analysis plot",
+            ),
+            (
+                "Customize Meas/True",
+                "_last_fig_measured_vs_true",
+                "Open style editor for the measured-vs-true current plot",
+            ),
+            (
+                "Customize Selected",
+                "_last_fig_custom",
+                "Open style editor for the custom multi-axis plot",
+            ),
         ]
         for _label, _attr, _desc in _cust_specs:
             _btn = AccessibleButton(_label, _desc)
-            _btn.clicked.connect(
-                lambda _checked=False, _a=_attr: self._open_plot_customizer(_a)
-            )
+            _btn.clicked.connect(lambda _checked=False, _a=_attr: self._open_plot_customizer(_a))
             customize_layout.addWidget(_btn)
 
         group_layout.addLayout(customize_layout)
@@ -4266,10 +4282,10 @@ class BLDCMotorControlGUI(QMainWindow):
             "Three configuration areas: motor parameters, load profile, and supply voltage profile."
         )
         motor_w = self._create_parameters_tab()
-        load_w  = self._create_load_tab()
+        load_w = self._create_load_tab()
         supply_w = self._create_supply_tab()
-        sub_tabs.addTab(motor_w,  "Motor")
-        sub_tabs.addTab(load_w,   "Load")
+        sub_tabs.addTab(motor_w, "Motor")
+        sub_tabs.addTab(load_w, "Load")
         sub_tabs.addTab(supply_w, "Supply")
         lay = QVBoxLayout()
         lay.addWidget(sub_tabs)
@@ -4278,7 +4294,7 @@ class BLDCMotorControlGUI(QMainWindow):
 
     def _create_controller_tab(self) -> None:
         """Tab 2 — Controller: simulation duration + V/f + FOC current loops + FW + PI gains."""
-        ctrl_widget = self._create_control_tab()   # returns widget (no addTab)
+        ctrl_widget = self._create_control_tab()  # returns widget (no addTab)
         scroll = QScrollArea()
         scroll.setWidget(ctrl_widget)
         scroll.setWidgetResizable(True)
@@ -4346,7 +4362,7 @@ class BLDCMotorControlGUI(QMainWindow):
         )
         outer = QVBoxLayout()
         outer.setContentsMargins(0, 0, 0, 0)
-        outer.addWidget(self._advanced_scroll)   # built by _create_control_tab
+        outer.addWidget(self._advanced_scroll)  # built by _create_control_tab
         container.setLayout(outer)
         self.tabs.addTab(container, "Advanced")
 
@@ -4362,12 +4378,12 @@ class BLDCMotorControlGUI(QMainWindow):
         sub_tabs.setAccessibleDescription(
             "Three sections: real-time monitoring, plot generation, and calibration."
         )
-        mon_w  = self._create_monitoring_tab()
+        mon_w = self._create_monitoring_tab()
         plot_w = self._create_plotting_tab()
-        cal_w  = self._create_calibration_tab()
-        sub_tabs.addTab(mon_w,  "Monitoring")
+        cal_w = self._create_calibration_tab()
+        sub_tabs.addTab(mon_w, "Monitoring")
         sub_tabs.addTab(plot_w, "Plotting")
-        sub_tabs.addTab(cal_w,  "Calibration")
+        sub_tabs.addTab(cal_w, "Calibration")
         lay = QVBoxLayout()
         lay.addWidget(sub_tabs)
         container.setLayout(lay)
@@ -4385,8 +4401,12 @@ class BLDCMotorControlGUI(QMainWindow):
         _pll_widgets = [self.foc_pll_kp, self.foc_pll_ki]
         _smo_widgets = [self.foc_smo_k_slide, self.foc_smo_lpf_alpha, self.foc_smo_boundary]
         _stsmo_widgets = [
-            self.foc_stsmo_k1, self.foc_stsmo_k2_min, self.foc_stsmo_k2_factor,
-            self.foc_stsmo_rated_rpm, self.foc_stsmo_autocalib_btn, self.foc_solver_mode,
+            self.foc_stsmo_k1,
+            self.foc_stsmo_k2_min,
+            self.foc_stsmo_k2_factor,
+            self.foc_stsmo_rated_rpm,
+            self.foc_stsmo_autocalib_btn,
+            self.foc_solver_mode,
         ]
         _af_widgets = [self.foc_af_dc_cutoff]
 
@@ -5606,7 +5626,7 @@ class BLDCMotorControlGUI(QMainWindow):
                 controller.stsmo["k1"] = self.foc_stsmo_k1.value()
                 controller.stsmo["k2_min"] = self.foc_stsmo_k2_min.value()
                 controller.stsmo["k2_factor"] = self.foc_stsmo_k2_factor.value()
-                controller.set_angle_observer("PLL")          # outer loop stays PLL
+                controller.set_angle_observer("PLL")  # outer loop stays PLL
             elif _obs_mode == "ActiveFlux":
                 controller.enable_active_flux_observer(
                     dc_cutoff_hz=self.foc_af_dc_cutoff.value(),
@@ -5857,6 +5877,7 @@ class BLDCMotorControlGUI(QMainWindow):
             return
         try:
             from src.control import FOCController as _FOC
+
             _tmp = _FOC(motor=self.motor)
             result = _tmp.calibrate_stsmo_gains_analytical(
                 rated_rpm=self.foc_stsmo_rated_rpm.value(),
@@ -6460,9 +6481,7 @@ class BLDCMotorControlGUI(QMainWindow):
                     "mechanical_output_power": float(
                         efficiency_state.get("mechanical_output_power_w", 0.0)
                     ),
-                    "effective_dc_voltage": float(
-                        inverter_state.get("effective_dc_voltage", 0.0)
-                    ),
+                    "effective_dc_voltage": float(inverter_state.get("effective_dc_voltage", 0.0)),
                     "dc_link_ripple_v": float(inverter_state.get("dc_link_ripple_v", 0.0)),
                 }
                 self.oscilloscope.push_sample(float(time_val), _osc_values)

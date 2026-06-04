@@ -11,9 +11,9 @@ Requirements:
     See requirements.txt
 
 :author: Amine Khettat — Blind Systems
-:version: 0.11.0
+:version: 0.12.0
 
-.. versionadded:: 0.11.0
+.. versionadded:: 0.12.0
     Initial application release
 """
 
@@ -41,7 +41,7 @@ def main():
     Initializes PySide6 application and launches the main GUI window.
     """
     logger.info("=" * 60)
-    logger.info("BLIND SYSTEMS SPINOTOR v0.11.0")
+    logger.info("BLIND SYSTEMS SPINOTOR v0.12.0")
     logger.info("=" * 60)
 
     try:
@@ -57,7 +57,7 @@ def main():
 
         # Set application info
         app.setApplicationName("BLIND SYSTEMS SPINOTOR")
-        app.setApplicationVersion("0.11.0")
+        app.setApplicationVersion("0.12.0")
 
         # Create and show main window
         window = BLDCMotorControlGUI()

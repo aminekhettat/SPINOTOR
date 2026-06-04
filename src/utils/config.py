@@ -82,6 +82,25 @@ FOC_FIELD_WEAKENING_PARAMS = {
     "headroom_target_v": 1.2,
 }
 
+# SOGI adaptive EMF filter defaults (Solution 1 in FOCController)
+#
+# * ``enabled`` toggles the SOGI bandpass on the reconstructed back-EMF.
+# * ``k`` is the damping coefficient (sqrt(2) gives a critically-damped
+#   resonant response with zero phase lag at the fundamental).
+# * ``discretization`` selects the integration scheme used to step the
+#   SOGI biquad:
+#       - ``"euler"``  : legacy forward-Euler (cheap, drifts at high
+#                        omega_e * Ts).
+#       - ``"tustin"`` : prewarped bilinear transform (extra biquad
+#                        state, exact resonance at every sample).
+#   See the v5 addendum of the sensorless observers report for a
+#   dual-motor comparison of the two schemes.
+FOC_SOGI_PARAMS = {
+    "enabled": False,
+    "k": 1.4142135623730951,
+    "discretization": "euler",
+}
+
 # Load profile defaults
 DEFAULT_LOAD_PROFILE = {
     "type": "constant",  # 'constant', 'ramp', 'variable', 'cyclic'

@@ -160,56 +160,65 @@ class FOCController(BaseController):
         # measured currents: e_αβ = v_αβ − R·i_αβ − L·Δi_αβ/dt
         # This replaces the simulation shortcut of reading motor.back_emf and
         # motor.omega directly, making the observers truly sensorless.
-        self._sensorless_emf_enabled = False   # enabled via enable_sensorless_emf_reconstruction()
+        self._sensorless_emf_enabled = False  # enabled via enable_sensorless_emf_reconstruction()
         self._emf_recon_R = float(motor.params.phase_resistance)
         self._emf_recon_L = float(
-            motor.params.ld if motor.params.ld is not None
-            else motor.params.phase_inductance
+            motor.params.ld if motor.params.ld is not None else motor.params.phase_inductance
         )
         _tau_e = self._emf_recon_L / max(self._emf_recon_R, 1e-9)
         self._emf_recon_lpf_tau = 3.0 * _tau_e  # LPF time constant (default 3×τ_e)
-        self._e_alpha_obs  = 0.0    # reconstructed EMF state, α axis
-        self._e_beta_obs   = 0.0    # reconstructed EMF state, β axis
-        self._i_alpha_prev = 0.0    # previous-step α current for di/dt
-        self._i_beta_prev  = 0.0    # previous-step β current for di/dt
+        self._e_alpha_obs = 0.0  # reconstructed EMF state, α axis
+        self._e_beta_obs = 0.0  # reconstructed EMF state, β axis
+        self._i_alpha_prev = 0.0  # previous-step α current for di/dt
+        self._i_beta_prev = 0.0  # previous-step β current for di/dt
         self._omega_elec_est = 0.0  # estimated ω_e from |E| = Ke·ω_mech
-        self.emf_reconstructed_mag = 0.0   # diagnostic
+        self.emf_reconstructed_mag = 0.0  # diagnostic
         self._use_estimated_speed_ff = True  # use ω_est instead of motor.omega as FF
         self._v_alpha_prev = 0.0  # applied α-voltage from previous step (for EMF recon)
-        self._v_beta_prev  = 0.0  # applied β-voltage from previous step (for EMF recon)
+        self._v_beta_prev = 0.0  # applied β-voltage from previous step (for EMF recon)
 
         # ── Solution 1: SOGI adaptive EMF filter ─────────────────────────────
         # Replaces the fixed-frequency LPF with a speed-adaptive resonant
         # bandpass (Second Order Generalized Integrator).  Zero phase lag at
         # the fundamental electrical frequency → eliminates +9° error at 3000 RPM.
-        self._use_sogi_filter  = False
-        self._sogi_k           = float(np.sqrt(2.0))   # SOGI damping (√2 ≈ 1.414)
-        self._sogi_e_alpha     = 0.0   # in-phase SOGI output, α axis
-        self._sogi_e_alpha_90  = 0.0   # quadrature SOGI output, α axis
-        self._sogi_e_beta      = 0.0   # in-phase SOGI output, β axis
-        self._sogi_e_beta_90   = 0.0   # quadrature SOGI output, β axis
+        self._use_sogi_filter = False
+        self._sogi_discretization = "euler"  # "euler" (forward) or "tustin" (bilinear, prewarped)
+        self._sogi_k = float(np.sqrt(2.0))  # SOGI damping (√2 ≈ 1.414)
+        self._sogi_e_alpha = 0.0  # in-phase SOGI output, α axis
+        self._sogi_e_alpha_90 = 0.0  # quadrature SOGI output, α axis
+        self._sogi_e_beta = 0.0  # in-phase SOGI output, β axis
+        self._sogi_e_beta_90 = 0.0  # quadrature SOGI output, β axis
+        # Tustin SOGI biquad memory (per axis): u[n-1], u[n-2], y[n-1], y[n-2]
+        self._sogi_ua1 = 0.0
+        self._sogi_ua2 = 0.0
+        self._sogi_ya1 = 0.0
+        self._sogi_ya2 = 0.0
+        self._sogi_ub1 = 0.0
+        self._sogi_ub2 = 0.0
+        self._sogi_yb1 = 0.0
+        self._sogi_yb2 = 0.0
 
         # ── Solution 2: Active Flux observer (Boldea 2009) ────────────────────
         # ψa = ψs − Ld·is always points along the d-axis → saliency-immune
         # position estimation decoupled from FW flux reduction.
-        self._use_active_flux  = False
-        self._psi_s_alpha      = 0.0   # stator flux estimate, α axis [Wb·rad_e]
-        self._psi_s_beta       = 0.0   # stator flux estimate, β axis
-        self._psi_af_prev_a    = 0.0   # previous ψa_α for speed estimate
-        self._psi_af_prev_b    = 0.0   # previous ψa_β for speed estimate
-        self._theta_est_af     = 0.0   # Active Flux angle estimate [rad]
-        self._omega_est_af     = 0.0   # Active Flux speed estimate [rad_e/s]
-        self._psi_af_mag       = 0.0   # |ψa| diagnostic [Wb]
-        self._af_omega_c       = 2.0 * np.pi * 0.5  # drift corrector cutoff [rad/s]
+        self._use_active_flux = False
+        self._psi_s_alpha = 0.0  # stator flux estimate, α axis [Wb·rad_e]
+        self._psi_s_beta = 0.0  # stator flux estimate, β axis
+        self._psi_af_prev_a = 0.0  # previous ψa_α for speed estimate
+        self._psi_af_prev_b = 0.0  # previous ψa_β for speed estimate
+        self._theta_est_af = 0.0  # Active Flux angle estimate [rad]
+        self._omega_est_af = 0.0  # Active Flux speed estimate [rad_e/s]
+        self._psi_af_mag = 0.0  # |ψa| diagnostic [Wb]
+        self._af_omega_c = 2.0 * np.pi * 0.5  # drift corrector cutoff [rad/s]
         _ke_raw = getattr(motor.params, "back_emf_constant", None)
-        self._emf_recon_ke     = float(_ke_raw) if _ke_raw else 0.028
+        self._emf_recon_ke = float(_ke_raw) if _ke_raw else 0.028
 
         # ── Solution 3: EEMF model (saliency Ld ≠ Lq) ───────────────────────
         # Uses Lq (not Ld) for the L·di/dt term, absorbing saliency into the
         # EEMF vector which remains proportional to [−sin θe; cos θe].
-        self._use_eemf_model   = False
+        self._use_eemf_model = False
         _lq_raw = getattr(motor.params, "lq", None)
-        self._emf_recon_Lq     = float(_lq_raw) if _lq_raw else self._emf_recon_L
+        self._emf_recon_Lq = float(_lq_raw) if _lq_raw else self._emf_recon_L
 
         # ── Solution 4: Super-Twisting SMO (ST-SMO) ──────────────────────────
         # Replaces standard sign()+LPF with ST algorithm that converges to
@@ -221,38 +230,38 @@ class FOCController(BaseController):
         # IPMSM (Lq ≠ Ld), the missing term (Lq−Ld)·id·ωe biases σ
         # unboundedly in field-weakening → z1 drift → divergence.
         # For salient IPMSM use ActiveFlux or EEMF-STSMO (Wang 2022).
-        self._use_stsmo        = False
-        self.stsmo             = {"k1": 100.0, "k2": 2000.0}
-        self._stsmo_i_alpha    = 0.0   # ST-SMO estimated current, α [A]
-        self._stsmo_i_beta     = 0.0   # ST-SMO estimated current, β [A]
-        self._stsmo_z1_alpha   = 0.0   # ST integrator state, α [V]
-        self._stsmo_z1_beta    = 0.0   # ST integrator state, β [V]
-        self._stsmo_e_alpha    = 0.0   # ST-SMO back-EMF estimate, α [V]
-        self._stsmo_e_beta     = 0.0   # ST-SMO back-EMF estimate, β [V]
+        self._use_stsmo = False
+        self.stsmo = {"k1": 100.0, "k2": 2000.0}
+        self._stsmo_i_alpha = 0.0  # ST-SMO estimated current, α [A]
+        self._stsmo_i_beta = 0.0  # ST-SMO estimated current, β [A]
+        self._stsmo_z1_alpha = 0.0  # ST integrator state, α [V]
+        self._stsmo_z1_beta = 0.0  # ST integrator state, β [V]
+        self._stsmo_e_alpha = 0.0  # ST-SMO back-EMF estimate, α [V]
+        self._stsmo_e_beta = 0.0  # ST-SMO back-EMF estimate, β [V]
 
         # ── Solution 5: Speed feedforward from vq voltage model ───────────────
         # ωe ≈ (vq − R·iq) / λeff  — bypasses the |E|/λ circular dependency.
-        self._use_vq_speed_ff  = False
-        self._omega_vq_est     = 0.0   # vq-model speed estimate [rad_m/s]
-        self._omega_vq_alpha   = 0.05  # blend LPF toward vq estimate
+        self._use_vq_speed_ff = False
+        self._omega_vq_est = 0.0  # vq-model speed estimate [rad_m/s]
+        self._omega_vq_alpha = 0.05  # blend LPF toward vq estimate
 
         # ── Solution 6: MRAS resistance adaptation ────────────────────────────
         # Online R estimation: dR̂/dt = −γR·(ê_α·i_α + ê_β·i_β).
         # Compensates +20–40 % thermal R drift in FW zone.
         self._use_mras_resistance = False
-        self._mras_R           = float(motor.params.phase_resistance)
-        self._mras_gamma_r     = 1.0   # adaptation gain [Ω/(V·A·s)]
-        self._mras_R_min       = 0.5 * float(motor.params.phase_resistance)
-        self._mras_R_max       = 4.0 * float(motor.params.phase_resistance)
+        self._mras_R = float(motor.params.phase_resistance)
+        self._mras_gamma_r = 1.0  # adaptation gain [Ω/(V·A·s)]
+        self._mras_R_min = 0.5 * float(motor.params.phase_resistance)
+        self._mras_R_max = 4.0 * float(motor.params.phase_resistance)
 
         # ── Solution 7: Adaptive PLL bandwidth ────────────────────────────────
         # kp = 2ζ·ωn(ω̂e)  ki = ωn(ω̂e)²  where ωn ∝ |ω̂e|.
         # Widens BW at high speed → faster FW transient tracking.
-        self._use_adaptive_pll_bw   = False
-        self._pll_zeta              = 0.9
-        self._pll_omega_n_factor    = 0.10   # ωn = factor × |ω̂e|
-        self._pll_omega_n_floor     = 50.0   # minimum ωn [rad/s]
-        self._pll_omega_n_ceil      = 600.0  # maximum ωn [rad/s]
+        self._use_adaptive_pll_bw = False
+        self._pll_zeta = 0.9
+        self._pll_omega_n_factor = 0.10  # ωn = factor × |ω̂e|
+        self._pll_omega_n_floor = 50.0  # minimum ωn [rad/s]
+        self._pll_omega_n_ceil = 600.0  # maximum ωn [rad/s]
 
         # Sensorless startup transition (initial observer -> target observer).
         self.startup_transition_enabled = False
@@ -496,7 +505,7 @@ class FOCController(BaseController):
             self.pi_d["integral"] = 0.0
             self.pi_q["integral"] = 0.0
             self._v_alpha_prev = 0.0
-            self._v_beta_prev  = 0.0
+            self._v_beta_prev = 0.0
         else:
             self.angle_observer_mode = self.observer_target_mode
             # ── Bumpless closed-loop transition ────────────────────────────
@@ -517,12 +526,16 @@ class FOCController(BaseController):
                 self.pll["integral"] = 0.0
                 # Initialise SMO speed from the reconstructed electrical speed
                 # so the first closed-loop integration step is smooth.
-                self.smo["omega_est"] = self._omega_elec_est if self._omega_elec_est > 0.0 else (
-                    self.startup_open_loop_speed_rpm
-                    / 60.0
-                    * 2.0
-                    * float(np.pi)
-                    * float(self.motor.params.poles_pairs)
+                self.smo["omega_est"] = (
+                    self._omega_elec_est
+                    if self._omega_elec_est > 0.0
+                    else (
+                        self.startup_open_loop_speed_rpm
+                        / 60.0
+                        * 2.0
+                        * float(np.pi)
+                        * float(self.motor.params.poles_pairs)
+                    )
                 )
 
     def _reset_startup_sequence_runtime(self) -> None:
@@ -536,6 +549,14 @@ class FOCController(BaseController):
         self._sogi_e_alpha_90 = 0.0
         self._sogi_e_beta = 0.0
         self._sogi_e_beta_90 = 0.0
+        self._sogi_ua1 = 0.0
+        self._sogi_ua2 = 0.0
+        self._sogi_ya1 = 0.0
+        self._sogi_ya2 = 0.0
+        self._sogi_ub1 = 0.0
+        self._sogi_ub2 = 0.0
+        self._sogi_yb1 = 0.0
+        self._sogi_yb2 = 0.0
         # Reset Active Flux states
         self._psi_s_alpha = 0.0
         self._psi_s_beta = 0.0
@@ -615,12 +636,15 @@ class FOCController(BaseController):
             self.theta_error_smo = 0.0
             # Solution 7: adaptive PLL bandwidth — ωn ∝ |ω̂e|
             if self._use_adaptive_pll_bw and abs(self._omega_elec_est) > 10.0:
-                omega_n = float(np.clip(
-                    self._pll_omega_n_factor * abs(self._omega_elec_est),
-                    self._pll_omega_n_floor, self._pll_omega_n_ceil,
-                ))
+                omega_n = float(
+                    np.clip(
+                        self._pll_omega_n_factor * abs(self._omega_elec_est),
+                        self._pll_omega_n_floor,
+                        self._pll_omega_n_ceil,
+                    )
+                )
                 kp = 2.0 * self._pll_zeta * omega_n
-                ki = omega_n ** 2
+                ki = omega_n**2
             else:
                 kp = self.pll["kp"]
                 ki = self.pll["ki"]
@@ -1040,7 +1064,7 @@ class FOCController(BaseController):
     # ═══════════════════════════════════════════════════════════════════════════
 
     # ── Solution 1 ────────────────────────────────────────────────────────────
-    def enable_sogi_filter(self, k: float = 1.4142) -> None:
+    def enable_sogi_filter(self, k: float = 1.4142, discretization: str = "euler") -> None:
         """Replace the fixed-frequency LPF with an adaptive SOGI bandpass filter.
 
         The SOGI (Second Order Generalized Integrator) has zero phase lag at
@@ -1053,9 +1077,59 @@ class FOCController(BaseController):
         k : float
             SOGI damping coefficient.  √2 ≈ 1.414 gives critical damping
             (no overshoot, fast settling).  Range [0.5, 2].
+        discretization : {"euler", "tustin"}
+            Numerical integration scheme.  ``"euler"`` is the legacy forward-
+            Euler update (low cost, frequency-dependent warping at high ωe·Ts).
+            ``"tustin"`` uses the bilinear (trapezoidal) transform with the
+            standard prewarped SOGI biquad, eliminating the per-step phase
+            drift introduced by Euler when ωe approaches Nyquist/8.
         """
         self._use_sogi_filter = True
         self._sogi_k = float(np.clip(k, 0.1, 5.0))
+        mode = str(discretization).strip().lower()
+        if mode not in ("euler", "tustin"):
+            raise ValueError("discretization must be 'euler' or 'tustin'")
+        self._sogi_discretization = mode
+        # Reset biquad memory whenever the scheme is (re)selected to avoid a
+        # transient from stale forward-Euler states when switching to Tustin.
+        self._sogi_ua1 = 0.0
+        self._sogi_ua2 = 0.0
+        self._sogi_ya1 = 0.0
+        self._sogi_ya2 = 0.0
+        self._sogi_ub1 = 0.0
+        self._sogi_ub2 = 0.0
+        self._sogi_yb1 = 0.0
+        self._sogi_yb2 = 0.0
+
+    def configure_sogi_from_dict(self, config: dict) -> None:
+        """Apply a SOGI configuration dictionary.
+
+        The dictionary follows the schema of ``FOC_SOGI_PARAMS`` in
+        ``src.utils.config``:
+
+        * ``enabled`` (bool): if ``False``, the SOGI bandpass is disabled and
+          the standard first-order LPF remains in use.
+        * ``k`` (float): SOGI damping coefficient, clipped to the valid range.
+        * ``discretization`` (str): ``"euler"`` (forward) or ``"tustin"``
+          (prewarped bilinear).
+
+        Raises
+        ------
+        TypeError
+            If ``config`` is not a mapping.
+        ValueError
+            If ``discretization`` is unknown.
+        """
+        if not isinstance(config, dict):
+            raise TypeError("SOGI config must be a dict")
+        enabled = bool(config.get("enabled", False))
+        if not enabled:
+            self._use_sogi_filter = False
+            return
+        k = float(config.get("k", float(np.sqrt(2.0))))
+        discretization = str(config.get("discretization", "euler"))
+        # Delegates validation and biquad-memory reset to enable_sogi_filter.
+        self.enable_sogi_filter(k=k, discretization=discretization)
 
     # ── Solution 2 ────────────────────────────────────────────────────────────
     def enable_active_flux_observer(self, dc_cutoff_hz: float = 0.5) -> None:
@@ -1078,8 +1152,7 @@ class FOCController(BaseController):
         self._af_omega_c = 2.0 * float(np.pi) * float(dc_cutoff_hz)
         self.observer_target_mode = "ActiveFlux"
 
-    def _update_active_flux(self, dt: float,
-                            i_alpha: float, i_beta: float) -> float:
+    def _update_active_flux(self, dt: float, i_alpha: float, i_beta: float) -> float:
         """Advance Active Flux observer one step; return estimated θe [rad]."""
         dt_s = max(dt, 1e-12)
         R = self._mras_R if self._use_mras_resistance else self._emf_recon_R
@@ -1089,31 +1162,23 @@ class FOCController(BaseController):
         # dψs/dt = v_s − R·i_s  → discrete forward Euler + leaky term
         # Leaky integrator: ψs[k+1] = (1 − ωc·dt)·ψs[k] + dt·(vs − R·is)
         leak = 1.0 - self._af_omega_c * dt_s
-        self._psi_s_alpha = leak * self._psi_s_alpha + dt_s * (
-            self._v_alpha_prev - R * i_alpha
-        )
-        self._psi_s_beta = leak * self._psi_s_beta + dt_s * (
-            self._v_beta_prev - R * i_beta
-        )
+        self._psi_s_alpha = leak * self._psi_s_alpha + dt_s * (self._v_alpha_prev - R * i_alpha)
+        self._psi_s_beta = leak * self._psi_s_beta + dt_s * (self._v_beta_prev - R * i_beta)
 
         # ── Active flux ψa = ψs − Ld·is ──────────────────────────────────────
         psi_a_alpha = self._psi_s_alpha - Ld * i_alpha
-        psi_a_beta  = self._psi_s_beta  - Ld * i_beta
+        psi_a_beta = self._psi_s_beta - Ld * i_beta
         self._psi_af_mag = float(np.hypot(psi_a_alpha, psi_a_beta))
 
         if self._psi_af_mag > 1e-6:
-            self._theta_est_af = float(
-                np.arctan2(psi_a_beta, psi_a_alpha)
-            ) % (2.0 * float(np.pi))
+            self._theta_est_af = float(np.arctan2(psi_a_beta, psi_a_alpha)) % (2.0 * float(np.pi))
 
         # ── Speed estimate from ψa cross-product ──────────────────────────────
         # ωe = (dψa_β·ψa_α − dψa_α·ψa_β) / |ψa|²
         dpa = psi_a_alpha - self._psi_af_prev_a
-        dpb = psi_a_beta  - self._psi_af_prev_b
+        dpb = psi_a_beta - self._psi_af_prev_b
         if self._psi_af_mag > 1e-6:
-            omega_raw = (dpb * psi_a_alpha - dpa * psi_a_beta) / (
-                self._psi_af_mag ** 2 * dt_s
-            )
+            omega_raw = (dpb * psi_a_alpha - dpa * psi_a_beta) / (self._psi_af_mag**2 * dt_s)
             # Low-pass blend
             self._omega_est_af = 0.9 * self._omega_est_af + 0.1 * omega_raw
             self._omega_elec_est = self._omega_est_af
@@ -1189,18 +1254,16 @@ class FOCController(BaseController):
         dict with keys ``k1``, ``k2``, ``e_max_v``, ``k2_min``.
         """
         if rated_rpm is None:
-            rated_rpm = float(
-                getattr(self.motor.params, "rated_speed_rpm", None) or 3500.0
-            )
-        ke   = float(self.motor.params.back_emf_constant)
-        pp   = float(self.motor.params.poles_pairs)
+            rated_rpm = float(getattr(self.motor.params, "rated_speed_rpm", None) or 3500.0)
+        ke = float(self.motor.params.back_emf_constant)
+        pp = float(self.motor.params.poles_pairs)
         # ke is in V·s/rad_mech; use mechanical angular speed for correct EMF
         ωm_max = rated_rpm / 60.0 * 2.0 * float(np.pi)
         ωe_max = ωm_max * pp
-        e_max  = ke * ωm_max          # max back-EMF amplitude [V]  (≈8.8 V Nanotec)
+        e_max = ke * ωm_max  # max back-EMF amplitude [V]  (≈8.8 V Nanotec)
         lam = float(convergence_factor)
-        k1  = lam * float(np.sqrt(e_max))
-        k2  = (lam ** 2) * e_max / 2.0
+        k1 = lam * float(np.sqrt(e_max))
+        k2 = (lam**2) * e_max / 2.0
         # Motor-aware k2_min: proportional to Ke × ωe_max so the floor covers
         # the EMF rate-of-change during a typical open-loop startup acceleration.
         # Formula: 1.5 × Ke × ωe_max gives a physical bound that scales with
@@ -1210,15 +1273,15 @@ class FOCController(BaseController):
         else:
             k2_min_val = float(np.clip(k2_min, 50.0, 20000.0))
         if apply:
-            self.stsmo["k1"]        = k1
-            self.stsmo["k2"]        = k2           # rated-speed reference value (informational)
+            self.stsmo["k1"] = k1
+            self.stsmo["k2"] = k2  # rated-speed reference value (informational)
             # k2_factor = 1.0 is the Levant theoretical minimum for the
             # rotating-EMF tracking condition k2 ≥ ke·ωm·ωe.  Larger values
             # increase chattering amplitude; smaller values cause z1 to lag.
             # The SOGI post-filter suppresses chattering, so 1.0 is optimal.
             self.stsmo["k2_factor"] = 1.0
-            self.stsmo["k2_min"]    = k2_min_val   # motor-aware floor [V/s]
-            self._use_stsmo         = True
+            self.stsmo["k2_min"] = k2_min_val  # motor-aware floor [V/s]
+            self._use_stsmo = True
         return {"k1": k1, "k2": k2, "e_max_v": e_max, "k2_min": k2_min_val}
 
     def _update_stsmo_emf(self, dt: float) -> tuple[float, float, float]:  # noqa: C901
@@ -1250,18 +1313,18 @@ class FOCController(BaseController):
         else:
             i_alpha, i_beta = clarke_transform(ia, ib, ic)
 
-        R   = self._mras_R if self._use_mras_resistance else self._emf_recon_R
-        L   = self._emf_recon_L
+        R = self._mras_R if self._use_mras_resistance else self._emf_recon_R
+        L = self._emf_recon_L
         dt_s = max(dt, 1e-12)
-        k1  = self.stsmo["k1"]
+        k1 = self.stsmo["k1"]
 
         # ── Speed-adaptive k2 ────────────────────────────────────────────────
         # Levant condition: k2 ≥ λ²·|ė_max| where |ė| = ke·ωm·ωe (rotating EMF).
         # A fixed k2 based on amplitude (old formula) is ~408× too small at
         # rated speed.  Adaptive scaling ensures z1 can track the rotating
         # back-EMF at any operating point without excessive chattering.
-        _ke_a   = float(self.motor.params.back_emf_constant)
-        _pp_a   = float(self.motor.params.poles_pairs)
+        _ke_a = float(self.motor.params.back_emf_constant)
+        _pp_a = float(self.motor.params.poles_pairs)
         # Use best available speed estimate for gain scheduling.
         # Priority: (1) open-loop reference speed during startup (known exact),
         # (2) omega_elec_est from PLL when above threshold, (3) true motor.omega
@@ -1273,14 +1336,14 @@ class FOCController(BaseController):
         # reliable floor so k2 is always sufficient even before PLL convergence.
         if self.startup_phase == "open_loop":
             _ol_rpm = abs(self.startup_open_loop_speed_rpm)
-            _oe_ol  = _ol_rpm / 60.0 * 2.0 * float(np.pi) * _pp_a
-            _oe_a   = max(_oe_a, _oe_ol)
+            _oe_ol = _ol_rpm / 60.0 * 2.0 * float(np.pi) * _pp_a
+            _oe_a = max(_oe_a, _oe_ol)
         # Always floor with motor.omega*Pp so k2 is sufficient as motor accelerates.
         _oe_motor_k2 = abs(float(self.motor.omega)) * _pp_a
         _oe_a = max(_oe_a, _oe_motor_k2, 10.0)
-        _om_a   = _oe_a / max(_pp_a, 1.0)
+        _om_a = _oe_a / max(_pp_a, 1.0)
         _k2_fac = float(self.stsmo.get("k2_factor", 1.0))
-        _k2_min = float(self.stsmo.get("k2_min",   500.0))
+        _k2_min = float(self.stsmo.get("k2_min", 500.0))
         k2 = max(_k2_min, _k2_fac * _ke_a * _om_a * _oe_a)
 
         # ── First-call EMF warm-start ─────────────────────────────────────────
@@ -1292,35 +1355,33 @@ class FOCController(BaseController):
         # omega_elec_est may still be 0 when the STSMO starts (the standard
         # path that sets it was bypassed), so fall back to motor.omega for
         # the one-time bootstrap only.
-        _z_fresh = (abs(self._stsmo_z1_alpha) < 1e-6
-                    and abs(self._stsmo_z1_beta) < 1e-6)
+        _z_fresh = abs(self._stsmo_z1_alpha) < 1e-6 and abs(self._stsmo_z1_beta) < 1e-6
         if _z_fresh:
-            _ke_v  = float(self.motor.params.back_emf_constant)
-            _pp_v  = float(self.motor.params.poles_pairs)
+            _ke_v = float(self.motor.params.back_emf_constant)
+            _pp_v = float(self.motor.params.poles_pairs)
             # Prefer the accumulated omega estimate; use open-loop reference during
             # startup (exact knowledge of the commanded frequency); fall back to
             # motor.omega truth for one-time bootstrap.
-            _oe    = abs(self._omega_elec_est)
+            _oe = abs(self._omega_elec_est)
             if self.startup_phase == "open_loop":
                 _ol_rpm_v = abs(self.startup_open_loop_speed_rpm)
-                _oe_ol_v  = _ol_rpm_v / 60.0 * 2.0 * float(np.pi) * _pp_v
-                _oe       = max(_oe, _oe_ol_v)
+                _oe_ol_v = _ol_rpm_v / 60.0 * 2.0 * float(np.pi) * _pp_v
+                _oe = max(_oe, _oe_ol_v)
             if _oe < 10.0:
                 _oe = abs(float(self.motor.omega)) * _pp_v  # one-time bootstrap
             if _oe > 10.0:
                 _emf0 = _ke_v * _oe / max(_pp_v, 1.0)
-                _th0  = float(self.theta_meas_emf)
+                _th0 = float(self.theta_meas_emf)
                 self._stsmo_z1_alpha = float(-_emf0 * np.sin(_th0))
-                self._stsmo_z1_beta  = float( _emf0 * np.cos(_th0))
-                self._omega_elec_est = _oe   # seed so subsequent steps stay valid
-            self._stsmo_i_alpha = i_alpha   # start current estimate from measurement
-            self._stsmo_i_beta  = i_beta
+                self._stsmo_z1_beta = float(_emf0 * np.cos(_th0))
+                self._omega_elec_est = _oe  # seed so subsequent steps stay valid
+            self._stsmo_i_alpha = i_alpha  # start current estimate from measurement
+            self._stsmo_i_beta = i_beta
 
         # Safety guard: snap if estimate diverged (should not happen after warm-start)
-        if (abs(self._stsmo_i_alpha - i_alpha) > 3.0
-                or abs(self._stsmo_i_beta - i_beta) > 3.0):
+        if abs(self._stsmo_i_alpha - i_alpha) > 3.0 or abs(self._stsmo_i_beta - i_beta) > 3.0:
             self._stsmo_i_alpha = i_alpha
-            self._stsmo_i_beta  = i_beta
+            self._stsmo_i_beta = i_beta
 
         # ── Backward-Euler implicit solve ────────────────────────────────────
         # Discretise  L·dî/dt = v − R·î − λ(σ)  with full implicit scheme:
@@ -1337,32 +1398,38 @@ class FOCController(BaseController):
         #
         # Stability: regardless of k1, |σ[k+1]| ≤ |c|/(1+…) < |σ[k]| near
         # origin ⇒ unconditionally stable; forward-Euler constraint lifted.
-        _den  = L + R * dt_s            # effective impedance [Ω]  (≈ 1.62 Ω @ 10 kHz)
-        _A_be = L / _den                # memory coefficient  (< 1, always stable)
-        _B_be = dt_s / _den             # excitation coefficient
-        _Bk1  = _B_be * k1              # combined super-twisting gain [A^0.5]
+        _den = L + R * dt_s  # effective impedance [Ω]  (≈ 1.62 Ω @ 10 kHz)
+        _A_be = L / _den  # memory coefficient  (< 1, always stable)
+        _B_be = dt_s / _den  # excitation coefficient
+        _Bk1 = _B_be * k1  # combined super-twisting gain [A^0.5]
 
         def _be_sigma(c: float) -> float:
             """Solve σ + _Bk1·|σ|^0.5·sign(σ) = c analytically."""
-            _disc = _Bk1 * _Bk1 + 4.0 * abs(c)      # always > 0
-            _u    = 0.5 * (-_Bk1 + float(np.sqrt(_disc)))
+            _disc = _Bk1 * _Bk1 + 4.0 * abs(c)  # always > 0
+            _u = 0.5 * (-_Bk1 + float(np.sqrt(_disc)))
             return (_u * _u) if c >= 0.0 else -(_u * _u)
 
-        _c_a = _A_be * self._stsmo_i_alpha + _B_be * (self._v_alpha_prev - self._stsmo_z1_alpha) - i_alpha  # noqa: E501
-        _c_b = _A_be * self._stsmo_i_beta  + _B_be * (self._v_beta_prev  - self._stsmo_z1_beta ) - i_beta  # noqa: E501
+        _c_a = (
+            _A_be * self._stsmo_i_alpha
+            + _B_be * (self._v_alpha_prev - self._stsmo_z1_alpha)
+            - i_alpha
+        )  # noqa: E501
+        _c_b = (
+            _A_be * self._stsmo_i_beta + _B_be * (self._v_beta_prev - self._stsmo_z1_beta) - i_beta
+        )  # noqa: E501
 
         sig_a = _be_sigma(_c_a)
         sig_b = _be_sigma(_c_b)
 
         # Recover new current estimate from implicit solve
         self._stsmo_i_alpha = i_alpha + sig_a
-        self._stsmo_i_beta  = i_beta  + sig_b
+        self._stsmo_i_beta = i_beta + sig_b
 
         # Integrate z1 with sign(σ[k+1]) — consistent with backward-Euler
         sign_a = float(np.sign(sig_a))
         sign_b = float(np.sign(sig_b))
         self._stsmo_z1_alpha += dt_s * k2 * sign_a
-        self._stsmo_z1_beta  += dt_s * k2 * sign_b
+        self._stsmo_z1_beta += dt_s * k2 * sign_b
 
         # ── SOGI filtering of z1 ─────────────────────────────────────────────
         # The sign-relay z1 update causes high-frequency chattering near the
@@ -1381,24 +1448,24 @@ class FOCController(BaseController):
         _oe_motor_sogi = abs(float(self.motor.omega)) * float(self.motor.params.poles_pairs)
         if self.startup_phase == "open_loop":
             _ol_rpm_s = abs(self.startup_open_loop_speed_rpm)
-            _oe_ol_s  = _ol_rpm_s / 60.0 * 2.0 * float(np.pi) * float(self.motor.params.poles_pairs)  # noqa: E501
+            _oe_ol_s = _ol_rpm_s / 60.0 * 2.0 * float(np.pi) * float(self.motor.params.poles_pairs)  # noqa: E501
             _sogi_omega = max(_sogi_omega, _oe_ol_s)
         _sogi_omega = max(_sogi_omega, _oe_motor_sogi)
         if _sogi_omega > 5.0:
-            _w_s  = _sogi_omega
-            _ks   = self._sogi_k          # damping coefficient (√2 default)
-            _ea   = self._stsmo_z1_alpha - self._sogi_e_alpha
-            self._sogi_e_alpha    += dt_s * _w_s * (_ks * _ea - self._sogi_e_alpha_90)
+            _w_s = _sogi_omega
+            _ks = self._sogi_k  # damping coefficient (√2 default)
+            _ea = self._stsmo_z1_alpha - self._sogi_e_alpha
+            self._sogi_e_alpha += dt_s * _w_s * (_ks * _ea - self._sogi_e_alpha_90)
             self._sogi_e_alpha_90 += dt_s * _w_s * self._sogi_e_alpha
-            _eb   = self._stsmo_z1_beta - self._sogi_e_beta
-            self._sogi_e_beta    += dt_s * _w_s * (_ks * _eb - self._sogi_e_beta_90)
+            _eb = self._stsmo_z1_beta - self._sogi_e_beta
+            self._sogi_e_beta += dt_s * _w_s * (_ks * _eb - self._sogi_e_beta_90)
             self._sogi_e_beta_90 += dt_s * _w_s * self._sogi_e_beta
             _e_alpha_filtered = self._sogi_e_alpha
-            _e_beta_filtered  = self._sogi_e_beta
+            _e_beta_filtered = self._sogi_e_beta
         else:
             # Below minimum speed: use z1 directly (no significant chattering)
             _e_alpha_filtered = self._stsmo_z1_alpha
-            _e_beta_filtered  = self._stsmo_z1_beta
+            _e_beta_filtered = self._stsmo_z1_beta
 
         # EMF estimate — SOGI-filtered z1, clipped to physical bounds
         # Floor e_max with nominal voltage so the clip never zeros the output
@@ -1408,15 +1475,15 @@ class FOCController(BaseController):
             float(self.motor.params.nominal_voltage),
         )
         self._stsmo_e_alpha = float(np.clip(_e_alpha_filtered, -e_max, e_max))
-        self._stsmo_e_beta  = float(np.clip(_e_beta_filtered,  -e_max, e_max))
+        self._stsmo_e_beta = float(np.clip(_e_beta_filtered, -e_max, e_max))
 
         # Reuse existing speed + angle estimation path
         self._e_alpha_obs = self._stsmo_e_alpha
-        self._e_beta_obs  = self._stsmo_e_beta
+        self._e_beta_obs = self._stsmo_e_beta
 
         # Update current memory for consistency with standard path
         self._i_alpha_prev = i_alpha
-        self._i_beta_prev  = i_beta
+        self._i_beta_prev = i_beta
 
         emf_mag = float(np.hypot(self._stsmo_e_alpha, self._stsmo_e_beta))
         self.emf_reconstructed_mag = emf_mag
@@ -1442,11 +1509,9 @@ class FOCController(BaseController):
 
         # MRAS-R update (if enabled)
         if self._use_mras_resistance and emf_mag > 5e-2:
-            mras_signal = (self._stsmo_e_alpha * i_alpha
-                           + self._stsmo_e_beta  * i_beta)
+            mras_signal = self._stsmo_e_alpha * i_alpha + self._stsmo_e_beta * i_beta
             self._mras_R -= self._mras_gamma_r * mras_signal * dt_s
-            self._mras_R  = float(np.clip(self._mras_R,
-                                          self._mras_R_min, self._mras_R_max))
+            self._mras_R = float(np.clip(self._mras_R, self._mras_R_min, self._mras_R_max))
 
         return self._stsmo_e_alpha, self._stsmo_e_beta, emf_mag
 
@@ -1464,8 +1529,8 @@ class FOCController(BaseController):
             Low-pass coefficient for the vq estimate (0 < α ≤ 1).
             Smaller values give smoother but slower response.
         """
-        self._use_vq_speed_ff  = True
-        self._omega_vq_alpha   = float(np.clip(blend_alpha, 1e-4, 1.0))
+        self._use_vq_speed_ff = True
+        self._omega_vq_alpha = float(np.clip(blend_alpha, 1e-4, 1.0))
 
     # ── Solution 6 ────────────────────────────────────────────────────────────
     def enable_mras_resistance(
@@ -1487,10 +1552,10 @@ class FOCController(BaseController):
             Clamp R̂ to [r_min_factor × R_nom, r_max_factor × R_nom].
         """
         self._use_mras_resistance = True
-        self._mras_gamma_r  = float(gamma_r)
-        self._mras_R_min    = float(r_min_factor) * self._emf_recon_R
-        self._mras_R_max    = float(r_max_factor) * self._emf_recon_R
-        self._mras_R        = self._emf_recon_R   # start from nominal
+        self._mras_gamma_r = float(gamma_r)
+        self._mras_R_min = float(r_min_factor) * self._emf_recon_R
+        self._mras_R_max = float(r_max_factor) * self._emf_recon_R
+        self._mras_R = self._emf_recon_R  # start from nominal
 
     # ── Solution 7 ────────────────────────────────────────────────────────────
     def enable_adaptive_pll_bandwidth(
@@ -1519,11 +1584,11 @@ class FOCController(BaseController):
         omega_n_ceil_rad : float
             Maximum ωn [rad/s] to cap bandwidth.
         """
-        self._use_adaptive_pll_bw  = True
-        self._pll_zeta             = float(zeta)
-        self._pll_omega_n_factor   = float(omega_n_factor)
-        self._pll_omega_n_floor    = float(omega_n_floor_rad)
-        self._pll_omega_n_ceil     = float(omega_n_ceil_rad)
+        self._use_adaptive_pll_bw = True
+        self._pll_zeta = float(zeta)
+        self._pll_omega_n_factor = float(omega_n_factor)
+        self._pll_omega_n_floor = float(omega_n_floor_rad)
+        self._pll_omega_n_ceil = float(omega_n_ceil_rad)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # END improvement solutions API
@@ -1598,14 +1663,12 @@ class FOCController(BaseController):
         dict with keys ``kp``, ``ki``, ``omega_n_rad_s``.
         """
         if rated_rpm is None:
-            rated_rpm = float(
-                getattr(self.motor.params, "rated_speed_rpm", None) or 3000.0
-            )
+            rated_rpm = float(getattr(self.motor.params, "rated_speed_rpm", None) or 3000.0)
         pp = float(self.motor.params.poles_pairs)
         omega_e_max = rated_rpm * np.pi / 30.0 * pp  # max electrical rad/s
         # PLL bandwidth = ωn ≤ ω_e_max / 5 to avoid phase lag at rated speed
         omega_n = omega_e_max / 5.0
-        ki = omega_n ** 2
+        ki = omega_n**2
         kp = 2.0 * float(zeta) * omega_n
         if apply:
             self.set_pll_gains(kp, ki)
@@ -1639,9 +1702,7 @@ class FOCController(BaseController):
         dict with keys ``k_slide``, ``lpf_alpha``, ``boundary``, ``tau_e_s``.
         """
         if rated_rpm is None:
-            rated_rpm = float(
-                getattr(self.motor.params, "rated_speed_rpm", None) or 3000.0
-            )
+            rated_rpm = float(getattr(self.motor.params, "rated_speed_rpm", None) or 3000.0)
         if dt is None:
             dt = 100e-6  # 100 µs default (10 kHz current loop)
         pp = float(self.motor.params.poles_pairs)
@@ -1667,9 +1728,7 @@ class FOCController(BaseController):
             "tau_e_s": tau_e,
         }
 
-    def _reconstruct_emf_sensorless(
-        self, dt: float
-    ) -> tuple[float, float, float]:
+    def _reconstruct_emf_sensorless(self, dt: float) -> tuple[float, float, float]:
         """Reconstruct back-EMF from voltage commands and measured currents.
 
         Formula: ``e_αβ = v_αβ[n-1] − R·i_αβ[n] − L·(i_αβ[n]−i_αβ[n-1])/dt``
@@ -1687,7 +1746,7 @@ class FOCController(BaseController):
 
         dt_safe = max(dt, 1e-12)
         di_alpha = (i_alpha - self._i_alpha_prev) / dt_safe
-        di_beta  = (i_beta  - self._i_beta_prev)  / dt_safe
+        di_beta = (i_beta - self._i_beta_prev) / dt_safe
 
         # Solution 6: use adaptive R if MRAS enabled, else nominal
         R_val = self._mras_R if self._use_mras_resistance else self._emf_recon_R
@@ -1697,33 +1756,64 @@ class FOCController(BaseController):
 
         # Raw EMF: e = v_prev − R·i − L·di/dt  (Lq used when EEMF enabled)
         e_alpha_raw = self._v_alpha_prev - R_val * i_alpha - Lq_val * di_alpha
-        e_beta_raw  = self._v_beta_prev  - R_val * i_beta  - Lq_val * di_beta
+        e_beta_raw = self._v_beta_prev - R_val * i_beta - Lq_val * di_beta
 
         # ── Solution 1: SOGI adaptive filter vs standard LPF ─────────────────
         if self._use_sogi_filter and abs(self._omega_elec_est) > 5.0:
-            # SOGI discrete update (forward Euler):
-            #   ê_α[k+1] = ê_α + dt·ωe·(k·(e_raw − ê_α) − ê_α⊥)
-            #   ê_α⊥[k+1]= ê_α⊥ + dt·ωe·ê_α
-            # Zero phase lag at ω = ωe; attenuates all other frequencies.
             w = abs(self._omega_elec_est)
             k = self._sogi_k
-            err_a = e_alpha_raw - self._sogi_e_alpha
-            self._sogi_e_alpha    += dt_safe * w * (k * err_a - self._sogi_e_alpha_90)
-            self._sogi_e_alpha_90 += dt_safe * w * self._sogi_e_alpha
-            err_b = e_beta_raw - self._sogi_e_beta
-            self._sogi_e_beta    += dt_safe * w * (k * err_b - self._sogi_e_beta_90)
-            self._sogi_e_beta_90 += dt_safe * w * self._sogi_e_beta
+            if self._sogi_discretization == "tustin":
+                # Prewarped bilinear (Tustin) SOGI biquad — Yepes 2011:
+                #   H_d(z) = (N1/A)·(1 - z⁻²) / (1 + (B/A)·z⁻¹ + (C/A)·z⁻²)
+                # with c=2/Ts, A=c²+kωc+ω², B=−2c²+2ω², C=c²−kωc+ω², N1=kωc.
+                # Coefficients are recomputed every step because ω is adaptive.
+                c = 2.0 / dt_safe
+                w2 = w * w
+                kwc = k * w * c
+                A = c * c + kwc + w2
+                B = -2.0 * c * c + 2.0 * w2
+                C = c * c - kwc + w2
+                N1 = kwc
+                inv_A = 1.0 / A
+                # α-axis biquad
+                y_a = (
+                    N1 * (e_alpha_raw - self._sogi_ua2) - B * self._sogi_ya1 - C * self._sogi_ya2
+                ) * inv_A
+                self._sogi_ua2 = self._sogi_ua1
+                self._sogi_ua1 = e_alpha_raw
+                self._sogi_ya2 = self._sogi_ya1
+                self._sogi_ya1 = y_a
+                self._sogi_e_alpha = y_a
+                # β-axis biquad
+                y_b = (
+                    N1 * (e_beta_raw - self._sogi_ub2) - B * self._sogi_yb1 - C * self._sogi_yb2
+                ) * inv_A
+                self._sogi_ub2 = self._sogi_ub1
+                self._sogi_ub1 = e_beta_raw
+                self._sogi_yb2 = self._sogi_yb1
+                self._sogi_yb1 = y_b
+                self._sogi_e_beta = y_b
+            else:
+                # Forward-Euler SOGI (legacy fast path):
+                #   ê_α[k+1] = ê_α + dt·ωe·(k·(e_raw − ê_α) − ê_α⊥)
+                #   ê_α⊥[k+1]= ê_α⊥ + dt·ωe·ê_α
+                err_a = e_alpha_raw - self._sogi_e_alpha
+                self._sogi_e_alpha += dt_safe * w * (k * err_a - self._sogi_e_alpha_90)
+                self._sogi_e_alpha_90 += dt_safe * w * self._sogi_e_alpha
+                err_b = e_beta_raw - self._sogi_e_beta
+                self._sogi_e_beta += dt_safe * w * (k * err_b - self._sogi_e_beta_90)
+                self._sogi_e_beta_90 += dt_safe * w * self._sogi_e_beta
             self._e_alpha_obs = self._sogi_e_alpha
-            self._e_beta_obs  = self._sogi_e_beta
+            self._e_beta_obs = self._sogi_e_beta
         else:
             # Standard first-order LPF
             lpf_alpha = dt_safe / (dt_safe + self._emf_recon_lpf_tau)
             self._e_alpha_obs = (1.0 - lpf_alpha) * self._e_alpha_obs + lpf_alpha * e_alpha_raw
-            self._e_beta_obs  = (1.0 - lpf_alpha) * self._e_beta_obs  + lpf_alpha * e_beta_raw
+            self._e_beta_obs = (1.0 - lpf_alpha) * self._e_beta_obs + lpf_alpha * e_beta_raw
 
         # Update current memory for next step
         self._i_alpha_prev = i_alpha
-        self._i_beta_prev  = i_beta
+        self._i_beta_prev = i_beta
 
         # Estimate electrical speed from back-EMF magnitude.
         # In field-weakening, negative id reduces the effective flux linkage:
@@ -1739,7 +1829,7 @@ class FOCController(BaseController):
             else getattr(self.motor.params, "torque_constant", 0.028)
         )
         pp = float(self.motor.params.poles_pairs)
-        lambda_pm = ke / max(pp, 1.0)          # nominal PM flux linkage [V·s/rad_e]
+        lambda_pm = ke / max(pp, 1.0)  # nominal PM flux linkage [V·s/rad_e]
         ld_raw = getattr(self.motor.params, "ld", None)
         if ld_raw is None:
             ld_raw = getattr(self.motor.params, "phase_inductance", None)
@@ -1748,7 +1838,7 @@ class FOCController(BaseController):
         # id estimate: project measured α-β currents onto the d-axis using the
         # last known EMF angle (theta_meas_emf).  Guarded against the startup
         # transient where theta_meas_emf may still be 0.
-        if emf_mag > 1e-3:                     # only when EMF signal is valid
+        if emf_mag > 1e-3:  # only when EMF signal is valid
             cos_th = float(np.cos(self.theta_meas_emf))
             sin_th = float(np.sin(self.theta_meas_emf))
             id_est = float(i_alpha * cos_th + i_beta * sin_th)
@@ -1773,13 +1863,14 @@ class FOCController(BaseController):
         if self._use_vq_speed_ff and emf_mag > 1e-2:
             cos_th = float(np.cos(self.theta_meas_emf))
             sin_th = float(np.sin(self.theta_meas_emf))
-            vq_proj = (-self._v_alpha_prev * sin_th + self._v_beta_prev * cos_th)
+            vq_proj = -self._v_alpha_prev * sin_th + self._v_beta_prev * cos_th
             iq_proj = float(-i_alpha * sin_th + i_beta * cos_th)
-            lam_pp  = max(lambda_eff * max(pp, 1.0), 1e-6)
+            lam_pp = max(lambda_eff * max(pp, 1.0), 1e-6)
             omega_vq_raw = (vq_proj - R_val * iq_proj) / lam_pp
             # Low-pass blend so transients don't destabilise the estimate
-            self._omega_vq_est = ((1.0 - self._omega_vq_alpha) * self._omega_vq_est
-                                  + self._omega_vq_alpha * omega_vq_raw)
+            self._omega_vq_est = (
+                1.0 - self._omega_vq_alpha
+            ) * self._omega_vq_est + self._omega_vq_alpha * omega_vq_raw
             # Weighted blend: 60 % |E| estimate, 40 % vq estimate.
             # omega_vq_raw = (Vq−R·iq)/(λeff·pp) is already in rad/s_mech,
             # so omega_vq_est is also in rad/s_mech — no extra /pp needed.
@@ -1793,10 +1884,9 @@ class FOCController(BaseController):
         # Intuition: if R is overestimated, ê contains a bias in the same
         # direction as i → dot product > 0 → R is decreased.
         if self._use_mras_resistance and emf_mag > 5e-2:
-            mras_signal = (self._e_alpha_obs * i_alpha + self._e_beta_obs * i_beta)
+            mras_signal = self._e_alpha_obs * i_alpha + self._e_beta_obs * i_beta
             self._mras_R -= self._mras_gamma_r * mras_signal * dt_safe
-            self._mras_R  = float(np.clip(self._mras_R,
-                                          self._mras_R_min, self._mras_R_max))
+            self._mras_R = float(np.clip(self._mras_R, self._mras_R_min, self._mras_R_max))
 
         return self._e_alpha_obs, self._e_beta_obs, emf_mag
 
@@ -1839,9 +1929,7 @@ class FOCController(BaseController):
             if self._sensorless_emf_enabled:
                 # dq reconstruction: e_α = −Ke·ω·sin(θe), e_β = +Ke·ω·cos(θe)
                 # → arctan2(−e_α, e_β) = arctan2(sin θe, cos θe) = θe  ✓
-                self.theta_meas_emf = float(
-                    np.arctan2(-emf_alpha, emf_beta)
-                ) % (2 * np.pi)
+                self.theta_meas_emf = float(np.arctan2(-emf_alpha, emf_beta)) % (2 * np.pi)
             else:
                 self.theta_meas_emf = float(np.arctan2(emf_beta, emf_alpha)) % (2 * np.pi)
 
@@ -1920,7 +2008,7 @@ class FOCController(BaseController):
         # low-speed EMF.  The observer tracks angle proportionally during
         # open-loop; the integral is enabled the moment the closed-loop
         # transition fires (pll["integral"] is set to 0 at that transition).
-        _open_loop_freeze = (self.startup_phase == "open_loop")
+        _open_loop_freeze = self.startup_phase == "open_loop"
 
         if mode == "PLL":
             err = _wrap_angle(self.theta_meas_emf - self.theta_est_pll)
@@ -2108,28 +2196,24 @@ class FOCController(BaseController):
         if pwm_freq_hz <= 0:
             raise ValueError("pwm_freq_hz must be positive")
         if speed_loop_hz <= 0 or speed_loop_hz > pwm_freq_hz:
-            raise ValueError(
-                f"speed_loop_hz must be in (0, pwm_freq_hz={pwm_freq_hz}]"
-            )
+            raise ValueError(f"speed_loop_hz must be in (0, pwm_freq_hz={pwm_freq_hz}]")
         if fw_loop_hz is None:
             fw_loop_hz = speed_loop_hz
         if fw_loop_hz <= 0 or fw_loop_hz > pwm_freq_hz:
-            raise ValueError(
-                f"fw_loop_hz must be in (0, pwm_freq_hz={pwm_freq_hz}]"
-            )
+            raise ValueError(f"fw_loop_hz must be in (0, pwm_freq_hz={pwm_freq_hz}]")
 
         speed_divider = max(1, round(pwm_freq_hz / speed_loop_hz))
-        fw_divider    = max(1, round(pwm_freq_hz / fw_loop_hz))
+        fw_divider = max(1, round(pwm_freq_hz / fw_loop_hz))
 
         self.set_speed_loop_divider(speed_divider)
         self.set_fw_loop_divider(fw_divider)
 
         return {
-            "pwm_freq_hz":    pwm_freq_hz,
-            "speed_loop_hz":  pwm_freq_hz / speed_divider,
-            "fw_loop_hz":     pwm_freq_hz / fw_divider,
-            "speed_divider":  speed_divider,
-            "fw_divider":     fw_divider,
+            "pwm_freq_hz": pwm_freq_hz,
+            "speed_loop_hz": pwm_freq_hz / speed_divider,
+            "fw_loop_hz": pwm_freq_hz / fw_divider,
+            "speed_divider": speed_divider,
+            "fw_divider": fw_divider,
         }
 
     def set_decoupling(self, enable_d: bool = False, enable_q: bool = False) -> None:
@@ -2462,7 +2546,7 @@ class FOCController(BaseController):
 
         # Store applied voltage vector for sensorless EMF reconstruction (next step)
         self._v_alpha_prev = v_alpha_cmd
-        self._v_beta_prev  = v_beta_cmd
+        self._v_beta_prev = v_beta_cmd
 
         if self.output_cartesian:
             return v_alpha_cmd, v_beta_cmd
@@ -2493,14 +2577,14 @@ class FOCController(BaseController):
         self.theta_error_smo = 0.0
         self.emf_observer_mag = 0.0
         # Sensorless EMF reconstructor state
-        self._e_alpha_obs  = 0.0
-        self._e_beta_obs   = 0.0
+        self._e_alpha_obs = 0.0
+        self._e_beta_obs = 0.0
         self._i_alpha_prev = 0.0
-        self._i_beta_prev  = 0.0
+        self._i_beta_prev = 0.0
         self._omega_elec_est = 0.0
         self.emf_reconstructed_mag = 0.0
         self._v_alpha_prev = 0.0
-        self._v_beta_prev  = 0.0
+        self._v_beta_prev = 0.0
         self.startup_elapsed_s = 0.0
         self.startup_confidence_elapsed_s = 0.0
         self.startup_fallback_elapsed_s = 0.0
@@ -2669,18 +2753,18 @@ class FOCController(BaseController):
             "pll": self.pll,
             "smo": self.smo,
             # ── improvement solutions diagnostics ──────────────────────────
-            "sogi_enabled":          self._use_sogi_filter,
-            "sogi_k":                self._sogi_k,
-            "active_flux_enabled":   self._use_active_flux,
-            "active_flux_theta":     self._theta_est_af,
-            "active_flux_omega":     self._omega_est_af,
-            "psi_af_mag":            self._psi_af_mag,
-            "eemf_enabled":          self._use_eemf_model,
-            "eemf_Lq":               self._emf_recon_Lq,
-            "stsmo_enabled":         self._use_stsmo,
-            "vq_ff_enabled":         self._use_vq_speed_ff,
-            "omega_vq_est_rad_s":    self._omega_vq_est,
-            "mras_R_enabled":        self._use_mras_resistance,
-            "mras_R_ohm":            self._mras_R,
-            "adaptive_pll_bw":       self._use_adaptive_pll_bw,
+            "sogi_enabled": self._use_sogi_filter,
+            "sogi_k": self._sogi_k,
+            "active_flux_enabled": self._use_active_flux,
+            "active_flux_theta": self._theta_est_af,
+            "active_flux_omega": self._omega_est_af,
+            "psi_af_mag": self._psi_af_mag,
+            "eemf_enabled": self._use_eemf_model,
+            "eemf_Lq": self._emf_recon_Lq,
+            "stsmo_enabled": self._use_stsmo,
+            "vq_ff_enabled": self._use_vq_speed_ff,
+            "omega_vq_est_rad_s": self._omega_vq_est,
+            "mras_R_enabled": self._use_mras_resistance,
+            "mras_R_ohm": self._mras_R,
+            "adaptive_pll_bw": self._use_adaptive_pll_bw,
         }

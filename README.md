@@ -2,7 +2,7 @@
 
 > **Free, accessible BLDC/PMSM motor-control simulator with sensorless FOC and V/f control — designed for engineers, researchers, and users with visual disabilities.**
 
-**Version 0.11.0** · Python 3.12 · PySide6 · [Documentation](docs/index.rst) · [Quickstart](QUICKSTART.md) · [Roadmap](Roadmap/ROADMAP.md)
+**Version 0.12.0** · Python 3.12 · PySide6 · [Documentation](docs/index.rst) · [Quickstart](QUICKSTART.md) · [Roadmap](Roadmap/ROADMAP.md)
 
 ---
 
@@ -18,36 +18,39 @@ The GUI runs on Windows, Linux, and macOS. It is built for keyboard-only navigat
 
 When this project was started, no existing free tool filled all of these gaps at once:
 
-| Gap | How SPINOTOR fills it |
-|-----|----------------------|
-| No free BLDC/PMSM simulator with **sensorless control** | Five observer modes: PLL, SMO, STSMO, Active Flux, and sensored reference |
-| No simulator combining **FOC** (vector) and **V/f** (scalar) in one tool | Both control strategies selectable from the same GUI |
-| Existing tools are commercial or closed-source | Fully open, no license fee |
-| Motor-control tools are inaccessible to visually impaired engineers | Screen reader support (NVDA, JAWS, Orca), keyboard-only workflow, spoken status updates |
+| Gap                                                                      | How SPINOTOR fills it                                                                   |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| No free BLDC/PMSM simulator with **sensorless control**                  | Five observer modes: PLL, SMO, STSMO, Active Flux, and sensored reference               |
+| No simulator combining **FOC** (vector) and **V/f** (scalar) in one tool | Both control strategies selectable from the same GUI                                    |
+| Existing tools are commercial or closed-source                           | Fully open, no license fee                                                              |
+| Motor-control tools are inaccessible to visually impaired engineers      | Screen reader support (NVDA, JAWS, Orca), keyboard-only workflow, spoken status updates |
 
 ---
 
 ## Key Features
 
 ### Control Strategies
+
 - **Field-Oriented Control (FOC)** — decoupled d/q current loops, PI auto-tuning, field weakening, cascaded speed loop
 - **Voltage/Frequency Control (V/f)** — scalar open-loop speed control with configurable startup ramp
 - **Space Vector Modulation (SVM)** — with optional PWM non-ideality effects
 
 ### Sensorless Angle Observers
+
 All modes are selectable from the **Observer & Startup** tab with context-sensitive parameter widgets:
 
-| Observer | Principle | Best for |
-|----------|-----------|----------|
-| **Measured** | True simulation angle (reference) | Controller tuning and debug |
-| **PLL** | Back-EMF phase-locked loop | Simple bring-up, SPM motors |
-| **SMO** | First-order sliding-mode | Disturbance-robust operation |
-| **STSMO** | Super-Twisting (2nd order), backward-Euler + SOGI filter | **SPM motors (Ld≈Lq)** — chattering-free, wide speed range |
-| **ActiveFlux** | Active flux vector ψa = ψs − Ld·is (Boldea 2009) | IPM motors, field-weakening |
+| Observer       | Principle                                                | Best for                                                   |
+| -------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
+| **Measured**   | True simulation angle (reference)                        | Controller tuning and debug                                |
+| **PLL**        | Back-EMF phase-locked loop                               | Simple bring-up, SPM motors                                |
+| **SMO**        | First-order sliding-mode                                 | Disturbance-robust operation                               |
+| **STSMO**      | Super-Twisting (2nd order), backward-Euler + SOGI filter | **SPM motors (Ld≈Lq)** — chattering-free, wide speed range |
+| **ActiveFlux** | Active flux vector ψa = ψs − Ld·is (Boldea 2009)         | IPM motors, field-weakening                                |
 
 → Full mathematical derivations and tuning guide: [`docs/sensorless_observers.rst`](docs/sensorless_observers.rst)
 
 ### Motor & Drive Modeling
+
 - Configurable motor parameters (R, Ld, Lq, Ke, Kt, poles, topology)
 - Star (wye) and delta winding topologies
 - Constant, ramp, and custom load profiles
@@ -55,6 +58,7 @@ All modes are selectable from the **Observer & Startup** tab with context-sensit
 - 1-, 2-, and 3-shunt current reconstruction with injectable amplifier errors
 
 ### Analysis & Calibration
+
 - Real-time monitoring dashboard (speed, currents, torque, power, efficiency)
 - FFT spectrum analyzer with magnitude/phase, dB scaling, and CSV/image export
 - Auto-calibration pipeline (analytic + physics-based, single-click)
@@ -62,6 +66,7 @@ All modes are selectable from the **Observer & Startup** tab with context-sensit
 - CSV data export with JSON metadata
 
 ### Accessibility
+
 - PySide6 GUI (LGPL) with full accessible names and descriptions on every widget
 - Keyboard shortcuts for all key actions (F5 start, F6 stop, F7 reset, Ctrl+S export)
 - Spoken status updates and narrated workflow events
@@ -88,13 +93,13 @@ For a step-by-step first simulation (5 minutes): see [QUICKSTART.md](QUICKSTART.
 
 ## GUI Tab Layout
 
-| Tab | Contents |
-|-----|----------|
-| **Motor & Drive** | Motor parameters · Load profile · Supply profile |
-| **Control** | FOC / V/f mode · PI tuning · Inverter realism · Timing |
+| Tab                    | Contents                                                    |
+| ---------------------- | ----------------------------------------------------------- |
+| **Motor & Drive**      | Motor parameters · Load profile · Supply profile            |
+| **Control**            | FOC / V/f mode · PI tuning · Inverter realism · Timing      |
 | **Observer & Startup** | Observer selection · Observer parameters · Startup sequence |
-| **Advanced Settings** | Current sensing · MCU budget · Hardware backend |
-| **Analysis** | Monitoring · Plotting · Calibration |
+| **Advanced Settings**  | Current sensing · MCU budget · Hardware backend             |
+| **Analysis**           | Monitoring · Plotting · Calibration                         |
 
 ---
 
@@ -135,15 +140,15 @@ SPINOTOR/
 
 ## Documentation
 
-| Document | Purpose |
-|----------|---------|
-| [QUICKSTART.md](QUICKSTART.md) | First simulation in 5 minutes |
-| [docs/features.rst](docs/features.rst) | Full feature inventory |
-| [docs/sensorless_observers.rst](docs/sensorless_observers.rst) | Observer math, API, and tuning |
-| [docs/advanced.rst](docs/advanced.rst) | FOC, FW, SVM, calibration deep dives |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution policy and quality gates |
-| [Roadmap/ROADMAP.md](Roadmap/ROADMAP.md) | Past milestones and planned work |
-| [references/](references/) | Control-theory formulas and bibliography |
+| Document                                                       | Purpose                                  |
+| -------------------------------------------------------------- | ---------------------------------------- |
+| [QUICKSTART.md](QUICKSTART.md)                                 | First simulation in 5 minutes            |
+| [docs/features.rst](docs/features.rst)                         | Full feature inventory                   |
+| [docs/sensorless_observers.rst](docs/sensorless_observers.rst) | Observer math, API, and tuning           |
+| [docs/advanced.rst](docs/advanced.rst)                         | FOC, FW, SVM, calibration deep dives     |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                             | Contribution policy and quality gates    |
+| [Roadmap/ROADMAP.md](Roadmap/ROADMAP.md)                       | Past milestones and planned work         |
+| [references/](references/)                                     | Control-theory formulas and bibliography |
 
 ---
 
